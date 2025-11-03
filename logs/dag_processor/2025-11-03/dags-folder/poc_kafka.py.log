@@ -1,0 +1,1 @@
+{"timestamp":"2025-11-03T01:42:22.914765","level":"info","event":"Filling up the DagBag from /opt/airflow/dags/poc_kafka.py","logger":"airflow.models.dagbag.DagBag"}

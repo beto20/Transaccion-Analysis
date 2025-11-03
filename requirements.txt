@@ -1,0 +1,6 @@
+# If you use the classic kafka-python package
+kafka-python==2.0.2
+confluent-kafka
+
+# (Optional but recommended) Airflow Kafka provider with sensors/operators
+apache-airflow-providers-apache-kafka
