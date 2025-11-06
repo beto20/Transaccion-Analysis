@@ -5,9 +5,9 @@ import os
 log = logging.getLogger('airflow.task')
 
 def upload_to_adls(
-        local_file_path = "/opt/airflow/data/sample.txt",
+        local_file_path = "/opt/airflow/data/sample.parquet",
         container_name = "airflow",
-        blob_name = "raw/uploaded_sample.txt",
+        blob_name = "raw/uploaded_sample.parquet",
         wasb_conn_id = "azure_blob_storage"
         ):
     try:

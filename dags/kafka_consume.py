@@ -1,6 +1,6 @@
 from airflow.decorators import dag, task
 from datetime import timedelta
-from pendulum import timezone
+import pendulum
 import json
 import logging
 import time
@@ -8,10 +8,6 @@ from confluent_kafka import Consumer, KafkaException, KafkaError
 import json, time, logging
 from scripts.azure_upload import upload_to_adls
 
-LOCAL_FILE_PATH = "/opt/airflow/data/sample.txt"
-CONTAINER_NAME = "airflow"
-WASB_CONN_ID = "azure_blob_stg"
-BLOB_NAME = "raw/G0/archivo_G5_test.txt"
 
 DEFAULT_ARGS = {
     "owner": "airflow",
@@ -95,17 +91,5 @@ def download_dag():
             c.close()
 
     consume_users_created()
-
-    @task
-    def call_upload():
-        new_blob_name = add_date_suffix(BLOB_NAME)
-        upload_to_adls(
-            local_file_path=LOCAL_FILE_PATH,
-            container_name=CONTAINER_NAME,
-            blob_name=new_blob_name,
-            wasb_conn_id = WASB_CONN_ID
-            )
-
-    call_upload()
 
 dag = download_dag()
