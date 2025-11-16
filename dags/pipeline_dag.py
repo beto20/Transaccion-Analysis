@@ -16,18 +16,51 @@ from scripts.azure_upload import upload_to_adls
 from scripts.helpers import add_date_suffix
 
 class Transaction:
-    def __init__(self, firstname, lastname):
+    def __init__(self, firstname, lastname, email):
         self.firstname = firstname
         self.lastname = lastname
+        self.email = email
 
     def to_dict(self):
-        return {"firstname": self.firstname, "lastname": self.lastname}
+        return {"firstname": self.firstname, "lastname": self.lastname, "email": self.email}
+    
+class Person:
+    def __init__(self, firstname, lastname, email, credit: Credit):
+        self.firstname = firstname
+        self.lastname = lastname
+        self.email = email
+        self.credit = credit
+
+    def to_dict(self):
+        return {"firstname": self.firstname, "lastname": self.lastname, "email": self.email}
+
+class Credit:
+    def __init__(self, amount, time, location):
+        self.amount = amount
+        self.time = time
+        self.location = location
+
+    def to_dict(self):
+        return {"amount": self.amount, "time": self.time, "location": self.location}
+    
+class TransactionV2:
+    def __init__(self, id, hasBlackList, person: Person):
+        self.id = id
+        self.hasBlackList = hasBlackList
+        self.person = person
+
+    def to_dict(self):
+        return {"id": self.id, "hasBlackList": self.hasBlackList}
+
 
 LOCAL_DIR = Path("/opt/airflow/data")
 LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
 CONTAINER_NAME = "datalake"
-BLOB_NAME = "raw/airflow/G5/archivo_G5_test.parquet"
+BLOB_NAME_BRONZE = "raw/airflow/G5/bronze/archivo_G5_test.parquet"
+BLOB_NAME_SILVER = "raw/airflow/G5/silver/archivo_G5_test.parquet"
+BLOB_NAME_GOLD = "raw/airflow/G5/gold/archivo_G5_test.parquet"
+
 
 DEFAULT_ARGS = {
     "owner": "airflow",
@@ -35,13 +68,38 @@ DEFAULT_ARGS = {
     "retry_delay": timedelta(minutes=1),
 }
 
-def _upload_to_storage(local_path: Path) -> None:
-    new_blob_name = add_date_suffix(BLOB_NAME)
+def _upload_to_storage(local_path: Path, blob_name: str) -> None:
+    new_blob_name = add_date_suffix(blob_name)
     upload_to_adls(
         local_file_path=str(local_path),
         container_name=CONTAINER_NAME,
         blob_name=new_blob_name,
     )
+
+def silver_layer(df: pd.DataFrame):
+    df_silver = df.loc[:, ["firstname", "lastname"]].copy()
+
+    tmp_path = LOCAL_DIR / f"batch_{int(time.time()*1e6)}-silver.parquet.tmp"
+    final_path = Path(str(tmp_path).removesuffix(".tmp"))
+
+    df_silver.to_parquet(tmp_path, engine="pyarrow", index=False)
+    tmp_path.replace(final_path)
+
+    _upload_to_storage(final_path, BLOB_NAME_SILVER)
+    
+def gold_layer(df: pd.DataFrame):
+    df = df[df["hasBlackList"] == True]
+    
+    df_gold = df.loc[:, ["firstname", "lastname"]].copy()
+
+    tmp_path = LOCAL_DIR / f"batch_{int(time.time()*1e6)}-gold.parquet.tmp"
+    final_path = Path(str(tmp_path).removesuffix(".tmp"))
+
+    df_gold.to_parquet(tmp_path, engine="pyarrow", index=False)
+    tmp_path.replace(final_path)
+
+    _upload_to_storage(final_path, BLOB_NAME_GOLD)
+    
 
 @dag(
     dag_id="consume_user_automation_v2",
@@ -57,7 +115,7 @@ def download_dag():
     def consume_and_batch_to_adls(
         duration_sec: int = 60,
         max_messages: Optional[int] = None,
-        batch_size: int = 20,
+        batch_size: int = 100,
     ) -> dict:
         log = logging.getLogger("consume_and_batch_to_adls")
         conf = {
@@ -78,13 +136,18 @@ def download_dag():
             nonlocal uploaded_files, buffer
             if not buffer:
                 return
+            
             df = pd.DataFrame([t.to_dict() for t in buffer])
             # atomic write
             tmp_path = LOCAL_DIR / f"batch_{int(time.time()*1e6)}.parquet.tmp"
             final_path = Path(str(tmp_path).removesuffix(".tmp"))
             df.to_parquet(tmp_path, engine="pyarrow", index=False)
+            
             tmp_path.replace(final_path)
-            _upload_to_storage(final_path)
+            _upload_to_storage(final_path, BLOB_NAME_BRONZE)
+            silver_layer(df)
+            # gold_layer(df)
+
             try:
                 final_path.unlink(missing_ok=True)
             except Exception:
@@ -111,7 +174,7 @@ def download_dag():
                     logging.info("START_MESSAGE_PROCESSING")
                     
                     payload = json.loads(msg.value().decode("utf-8"))
-                    trx = Transaction(payload.get("first_name"), payload.get("last_name"))
+                    trx = Transaction(payload.get("first_name"), payload.get("last_name"), payload.get("email"))
                     logging.info("trx: %s", trx.to_dict())
                     buffer.append(trx)
 

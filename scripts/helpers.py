@@ -17,7 +17,7 @@ def add_date_suffix(filename, date=None):
         date = datetime.today()
         
     name, ext = os.path.splitext(filename)
-    date_str = date.strftime("%Y%m%d")
+    date_str = date.strftime("%Y%m%d_%H%M%S_%f")
     return f"{name}_{date_str}{ext}"
 
 def leer_datos(path):
