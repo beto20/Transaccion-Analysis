@@ -44,6 +44,23 @@ class Credit:
         return {"amount": self.amount, "time": self.time, "location": self.location}
     
 class TransactionV2:
+    def __init__(self, id, hasBlackList, firstname, lastname, email, amount, time, location):
+        self.id = id
+        self.hasBlackList = hasBlackList
+
+        self.firstname = firstname
+        self.lastname = lastname
+        self.email = email
+
+        self.amount = amount
+        self.time = time
+        self.location = location
+
+    def to_dict(self):
+        return {"id": self.id, "hasBlackList": self.hasBlackList}
+    
+    
+class TransactionV3:
     def __init__(self, id, hasBlackList, person: Person):
         self.id = id
         self.hasBlackList = hasBlackList
@@ -57,7 +74,7 @@ LOCAL_DIR = Path("/opt/airflow/data")
 LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
 CONTAINER_NAME = "datalake"
-BLOB_NAME_BRONZE = "raw/airflow/G5/bronze/archivo_G5_test.parquet"
+BLOB_NAME_BRONZE = "raw/airflow/G5/archivo_G5_test.parquet"
 BLOB_NAME_SILVER = "raw/airflow/G5/silver/archivo_G5_test.parquet"
 BLOB_NAME_GOLD = "raw/airflow/G5/gold/archivo_G5_test.parquet"
 
@@ -145,7 +162,7 @@ def download_dag():
             
             tmp_path.replace(final_path)
             _upload_to_storage(final_path, BLOB_NAME_BRONZE)
-            silver_layer(df)
+            # silver_layer(df)
             # gold_layer(df)
 
             try:
